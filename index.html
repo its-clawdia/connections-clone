@@ -328,6 +328,9 @@ async function loadDate(date, isRetry = false) {
 
 function initGame() {
   gameOver = false; selected = []; mistakes = 0; solved = []; cards = [];
+  const ab = document.getElementById('autosolve-btn');
+  ab.textContent = '🤖 Auto-Solve';
+  ab.onclick = null;
   puzzle.groups.forEach(g => g.words.forEach(w => cards.push({ word: w, groupColor: g.color })));
   shuffle(cards);
   updateDots(); renderSolvedGroups(); renderGrid(); updateSubmitBtn();
@@ -551,6 +554,7 @@ document.getElementById('autosolve-btn').addEventListener('click', () => {
   if (!confirm('Auto-solve this puzzle? This will reveal all answers.')) return;
   gameOver = true;
   const remaining = [...puzzle.groups].filter(g => !solved.find(s => s.color === g.color));
+  const btn = document.getElementById('autosolve-btn');
   let delay = 0;
   remaining.forEach(group => {
     setTimeout(() => {
@@ -562,11 +566,8 @@ document.getElementById('autosolve-btn').addEventListener('click', () => {
     delay += 600;
   });
   setTimeout(() => {
-    document.getElementById('modal-title').textContent = '🤖 Solved!';
-    document.getElementById('modal-msg').textContent = 'Better luck next time!';
-    const resultEl = document.getElementById('modal-result');
-    resultEl.innerHTML = '';
-    document.getElementById('modal').classList.add('show');
+    btn.textContent = '🔄 Play Again';
+    btn.onclick = initGame;
   }, delay + 200);
 });
 
