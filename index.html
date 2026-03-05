@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connections</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: #fff;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 20px;
+  }
+  h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 16px 0 4px; }
+  .subtitle { font-size: 0.85rem; color: #555; margin-bottom: 10px; }
+
+  #puzzle-selector { width: 616px; max-width: 100%; margin-bottom: 10px; display: flex; gap: 8px; align-items: center; }
+  #puzzle-selector label { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+  #puzzle-selector select {
+    flex: 1; padding: 8px 10px;
+    border: 2px solid #333; border-radius: 8px;
+    font-size: 0.9rem; background: #fff; cursor: pointer;
+  }
+
+  .mistakes { font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #333; }
+  .dot.used { background: #ccc; }
+
+  .solved-groups { width: 616px; max-width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .solved-group { border-radius: 8px; padding: 14px; text-align: center; }
+  .solved-group .group-title { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.05em; }
+  .solved-group .group-words { font-size: 0.95rem; font-weight: 600; }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(4, 148px);
+    gap: 8px; width: 616px; margin-bottom: 16px;
+  }
+  @media (max-width: 660px) {
+    .grid { grid-template-columns: repeat(4, 1fr); width: 100%; }
+  }
+  .card {
+    background: #efefe6; border-radius: 8px;
+    height: 72px; display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+    text-transform: uppercase; cursor: grab; user-select: none;
+    text-align: center; line-height: 1.2; padding: 6px;
+    transition: background 0.1s, opacity 0.1s, transform 0.1s;
+    overflow: hidden; word-break: break-word;
+    /* Scale text down to fit without changing tile size */
+    container-type: size;
+  }
+  .card span { display: block; line-height: 1.25; }
+  .card.len-s  span { font-size: 1rem; }
+  .card.len-m  span { font-size: 0.82rem; }
+  .card.len-l  span { font-size: 0.68rem; }
+  .card.len-xl span { font-size: 0.58rem; }
+  .card:hover { background: #ddddd4; }
+  .card.selected { background: #5a594e; color: #fff; }
+  .card.shake { animation: shake 0.4s; }
+  .card.dragging { opacity: 0.35; cursor: grabbing; transform: scale(0.97); }
+  .card.drag-over { outline: 3px dashed #888; outline-offset: -3px; }
+
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-6px)} 40%{transform:translateX(6px)}
+    60%{transform:translateX(-4px)} 80%{transform:translateX(4px)}
+  }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
+  button {
+    padding: 10px 22px; border-radius: 999px; border: 2px solid #333;
+    background: #fff; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    transition: background 0.1s;
+  }
+  button:hover { background: #f0f0f0; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button#submit-btn { background: #333; color: #fff; border-color: #333; }
+  button#submit-btn:disabled { background: #aaa; border-color: #aaa; }
+  button#submit-btn:not(:disabled):hover { background: #111; }
+
+  /* Status area */
+  #status-area {
+    width: 100%; max-width: 480px; text-align: center;
+    padding: 40px 20px; display: none; flex-direction: column;
+    align-items: center; gap: 16px;
+  }
+  #status-area.show { display: flex; }
+  #status-icon { font-size: 2.5rem; }
+  #status-msg { font-size: 1rem; color: #444; font-weight: 500; }
+  #status-sub { font-size: 0.85rem; color: #888; }
+
+  .toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 0.9rem; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 200;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px;
+    padding: 32px 24px; max-width: 360px; width: 90%; text-align: center;
+  }
+  .modal h2 { font-size: 1.3rem; margin-bottom: 12px; }
+  .modal p { font-size: 0.9rem; color: #555; margin-bottom: 20px; }
+  .modal .result-groups { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .modal .result-group { border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; font-weight: 600; }
+
+  .color-0 { background: #f9df6d; }
+  .color-1 { background: #a0c35a; }
+  .color-2 { background: #b0c4ef; }
+  .color-3 { background: #ba81c5; }
+
+  #date-picker-btn { font-size: 0.85rem; padding: 8px 14px; }
+
+  /* Dark mode */
+  #theme-btn {
+    position: fixed; top: 14px; right: 14px;
+    padding: 6px 12px; font-size: 1rem;
+    border-radius: 999px; border: 2px solid #333;
+    background: #fff; cursor: pointer; z-index: 300;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  body.dark { background: #121212; color: #e8e8e8; }
+  body.dark #theme-btn { background: #222; border-color: #888; color: #e8e8e8; }
+  body.dark .subtitle { color: #aaa; }
+  body.dark #puzzle-selector select { background: #222; border-color: #666; color: #e8e8e8; }
+  body.dark .card { background: #2a2a2a; color: #e8e8e8; }
+  body.dark .card:hover { background: #383838; }
+  body.dark .card.selected { background: #a8a79a; color: #111; }
+  body.dark .card.drag-over { outline-color: #aaa; }
+  body.dark .dot { background: #e8e8e8; }
+  body.dark .dot.used { background: #555; }
+  body.dark button { background: #222; border-color: #666; color: #e8e8e8; }
+  body.dark button:hover { background: #333; }
+  body.dark button#submit-btn { background: #e8e8e8; color: #111; border-color: #e8e8e8; }
+  body.dark button#submit-btn:disabled { background: #555; border-color: #555; color: #999; }
+  body.dark button#submit-btn:not(:disabled):hover { background: #ccc; }
+  body.dark #status-msg { color: #ccc; }
+  body.dark .modal { background: #1e1e1e; color: #e8e8e8; }
+  body.dark .modal p { color: #aaa; }
+  body.dark .toast { background: #e8e8e8; color: #111; }
+  body.dark .color-0 { background: #b8a030; }
+  body.dark .color-1 { background: #5a8a30; }
+  body.dark .color-2 { background: #4060a8; }
+  body.dark .color-3 { background: #7a40a0; }
+
+  /* Cat Easter egg */
+  #cat-walker {
+    position: fixed; bottom: 18px; font-size: 2rem;
+    animation: cat-walk 6s linear forwards;
+    pointer-events: none; z-index: 999; white-space: nowrap;
+  }
+  @keyframes cat-walk {
+    0%   { left: -80px; transform: scaleX(1); }
+    45%  { left: calc(100% + 80px); transform: scaleX(1); }
+    50%  { left: calc(100% + 80px); transform: scaleX(-1); }
+    95%  { left: -80px; transform: scaleX(-1); }
+    100% { left: -80px; opacity: 0; }
+  }
+  #cat-speech {
+    position: fixed; bottom: 58px; left: 50%;
+    transform: translateX(-50%);
+    background: #333; color: #fff; border-radius: 12px;
+    padding: 6px 14px; font-size: 0.85rem; font-weight: 600;
+    pointer-events: none; z-index: 999;
+    animation: fade-speech 6s ease forwards;
+  }
+  @keyframes fade-speech {
+    0%,10% { opacity:0; } 20%,80% { opacity:1; } 95%,100% { opacity:0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>CONNECTIONS</h1>
+<p class="subtitle">Group four words that share a common thread.</p>
+
+<div id="puzzle-selector">
+  <label>Puzzle:</label>
+  <select id="puzzle-select"></select>
+  <button id="date-picker-btn" title="Load a specific date">📅</button>
+</div>
+
+<div class="mistakes">
+  Mistakes remaining:
+  <div class="dots">
+    <div class="dot" id="dot0"></div><div class="dot" id="dot1"></div>
+    <div class="dot" id="dot2"></div><div class="dot" id="dot3"></div>
+  </div>
+</div>
+
+<div class="solved-groups" id="solved-groups"></div>
+
+<div id="status-area">
+  <div id="status-icon">⏳</div>
+  <div id="status-msg">Loading today's puzzle…</div>
+  <div id="status-sub"></div>
+  <button id="retry-btn" style="display:none">Try Again</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="controls">
+  <button id="shuffle-btn">Shuffle</button>
+  <button id="deselect-btn">Deselect All</button>
+  <button id="submit-btn" disabled>Submit</button>
+  <button id="autosolve-btn">🤖 Auto-Solve</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modal-title"></h2>
+    <p id="modal-msg"></p>
+    <div class="result-groups" id="modal-result"></div>
+    <button id="modal-close-btn">Play Again</button>
+  </div>
+</div>
+
+<button id="theme-btn" title="Toggle dark mode">🌙</button>
+
+<!-- Hidden date input -->
+<input type="date" id="hidden-date-input" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
+
+<script>
+// ── Cache ─────────────────────────────────────────────────────────────────────
+const CACHE_KEY = 'connections_cache_v1';
+const HISTORY_KEY = 'connections_history_v1';
+
+function getCache() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch { return {}; }
+}
+function setCache(cache) {
+  localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+}
+function getCachedPuzzle(date) {
+  return getCache()[date] || null;
+}
+function cachePuzzle(date, puzzle) {
+  const cache = getCache();
+  cache[date] = puzzle;
+  setCache(cache);
+}
+function getCachedDates() {
+  return Object.keys(getCache()).sort().reverse();
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+async function fetchPuzzle(date) {
+  const cached = getCachedPuzzle(date);
+  if (cached) return cached;
+
+  const nytUrl = `https://www.nytimes.com/svc/connections/v2/${date}.json`;
+  const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(nytUrl)}`;
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data.categories) throw new Error('No categories in response');
+
+  const puzzle = {
+    name: `${date}`,
+    date,
+    id: data.id,
+    groups: data.categories.map((cat, i) => ({
+      category: cat.title.toUpperCase(),
+      words: cat.cards.map(c => c.content.toUpperCase()),
+      color: i
+    }))
+  };
+  cachePuzzle(date, puzzle);
+  return puzzle;
+}
+
+function localDateStr(offset = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let puzzle, cards, selected, mistakes, solved, gameOver;
+const maxMistakes = 4;
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function showStatus(icon, msg, sub = '', showRetry = false) {
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('status-area').classList.add('show');
+  document.getElementById('status-icon').textContent = icon;
+  document.getElementById('status-msg').textContent = msg;
+  document.getElementById('status-sub').textContent = sub;
+  document.getElementById('retry-btn').style.display = showRetry ? '' : 'none';
+  updateSubmitBtn();
+}
+function hideStatus() {
+  document.getElementById('status-area').classList.remove('show');
+}
+
+async function loadDate(date, isRetry = false) {
+  showStatus('⏳', `Loading puzzle for ${date}…`);
+  try {
+    puzzle = await fetchPuzzle(date);
+    hideStatus();
+    rebuildSelector();
+    initGame();
+  } catch (err) {
+    console.error(err);
+    showStatus('😕', `No puzzle available for ${date}.`,
+      'It may not be published yet.', true);
+    document.getElementById('retry-btn').onclick = () => loadDate(date, true);
+  }
+}
+
+function initGame() {
+  gameOver = false; selected = []; mistakes = 0; solved = []; cards = [];
+  puzzle.groups.forEach(g => g.words.forEach(w => cards.push({ word: w, groupColor: g.color })));
+  shuffle(cards);
+  updateDots(); renderSolvedGroups(); renderGrid(); updateSubmitBtn();
+  document.getElementById('modal').classList.remove('show');
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  cards.forEach((card, i) => {
+    const el = document.createElement('div');
+    el.className = 'card' + (selected.includes(i) ? ' selected' : '');
+    const len = card.word.length;
+    const sizeClass = len <= 8 ? 'len-s' : len <= 13 ? 'len-m' : len <= 18 ? 'len-l' : 'len-xl';
+    el.classList.add(sizeClass);
+    el.innerHTML = `<span>${card.word}</span>`;
+    el.dataset.index = i;
+    el.addEventListener('click', () => toggleSelect(i));
+    addDragListeners(el, i);
+    grid.appendChild(el);
+  });
+}
+
+function toggleSelect(i) {
+  if (gameOver) return;
+  selected = selected.includes(i) ? selected.filter(x => x !== i) : (selected.length < 4 ? [...selected, i] : selected);
+  renderGrid(); updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  document.getElementById('submit-btn').disabled = !puzzle || selected.length !== 4;
+}
+
+function updateDots() {
+  for (let i = 0; i < 4; i++)
+    document.getElementById('dot' + i).classList.toggle('used', i >= (maxMistakes - mistakes));
+}
+
+function renderSolvedGroups() {
+  const el = document.getElementById('solved-groups');
+  el.innerHTML = '';
+  (solved || []).forEach(g => {
+    const div = document.createElement('div');
+    div.className = `solved-group color-${g.color}`;
+    div.innerHTML = `<div class="group-title">${g.category}</div><div class="group-words">${g.words.join(', ')}</div>`;
+    el.appendChild(div);
+  });
+}
+
+function showToast(msg, duration = 1800) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function submit() {
+  if (selected.length !== 4 || gameOver) return;
+  const selectedCards = selected.map(i => cards[i]);
+  const groupColor = selectedCards[0].groupColor;
+  const allSame = selectedCards.every(c => c.groupColor === groupColor);
+
+  if (allSame) {
+    const group = puzzle.groups.find(g => g.color === groupColor);
+    solved.push(group);
+    cards = cards.filter((_, i) => !selected.includes(i));
+    selected = [];
+    renderSolvedGroups(); renderGrid(); updateSubmitBtn();
+    if (solved.length === puzzle.groups.length) setTimeout(() => endGame(true), 400);
+    else showToast('Correct! 🎉');
+  } else {
+    const counts = {};
+    selectedCards.forEach(c => { counts[c.groupColor] = (counts[c.groupColor] || 0) + 1; });
+    mistakes++; updateDots();
+    const els = document.querySelectorAll('.card');
+    selected.forEach(i => {
+      if (els[i]) { els[i].classList.add('shake'); setTimeout(() => els[i].classList.remove('shake'), 500); }
+    });
+    showToast(Object.values(counts).some(v => v === 3) ? 'One away...' : 'Not quite.');
+    selected = [];
+    setTimeout(() => { renderGrid(); updateSubmitBtn(); }, 500);
+    if (mistakes >= maxMistakes) setTimeout(() => endGame(false), 600);
+  }
+}
+
+function endGame(won) {
+  gameOver = true;
+  document.getElementById('modal-title').textContent = won ? '🎉 You won!' : 'Better luck next time!';
+  document.getElementById('modal-msg').textContent = won
+    ? `Solved with ${mistakes} mistake${mistakes !== 1 ? 's' : ''}!`
+    : "Here's the solution:";
+  const resultEl = document.getElementById('modal-result');
+  resultEl.innerHTML = '';
+  puzzle.groups.forEach(g => {
+    const div = document.createElement('div');
+    div.className = `result-group color-${g.color}`;
+    div.textContent = `${g.category}: ${g.words.join(', ')}`;
+    resultEl.appendChild(div);
+  });
+  document.getElementById('modal').classList.add('show');
+}
+
+// ── Selector ──────────────────────────────────────────────────────────────────
+function rebuildSelector() {
+  const sel = document.getElementById('puzzle-select');
+  const dates = getCachedDates();
+  const today = localDateStr();
+  const allDates = dates.includes(today) ? dates : [today, ...dates];
+  sel.innerHTML = '';
+  allDates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    const label = d === today ? `Today (${d})` : d;
+    opt.textContent = label;
+    if (puzzle && d === puzzle.date) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('puzzle-select').addEventListener('change', e => {
+  loadDate(e.target.value);
+});
+
+// ── Date picker ───────────────────────────────────────────────────────────────
+const hiddenDate = document.getElementById('hidden-date-input');
+hiddenDate.max = localDateStr();
+hiddenDate.min = '2023-06-12'; // first NYT connections puzzle
+document.getElementById('date-picker-btn').addEventListener('click', () => hiddenDate.showPicker ? hiddenDate.showPicker() : hiddenDate.click());
+hiddenDate.addEventListener('change', () => {
+  if (hiddenDate.value) {
+    loadDate(hiddenDate.value);
+    hiddenDate.value = '';
+  }
+});
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+let dragSrcIdx = null;
+
+function addDragListeners(el, i) {
+  el.setAttribute('draggable', 'true');
+  el.addEventListener('dragstart', e => {
+    if (gameOver) { e.preventDefault(); return; }
+    dragSrcIdx = i; el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
+    dragSrcIdx = null;
+  });
+  el.addEventListener('dragover', e => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
+    if (dragSrcIdx !== null && dragSrcIdx !== i) el.classList.add('drag-over');
+  });
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    if (dragSrcIdx === null || dragSrcIdx === i) return;
+    swapCards(dragSrcIdx, i);
+  });
+
+  let touchStartX, touchStartY, ghost;
+  el.addEventListener('touchstart', e => {
+    if (gameOver) return;
+    const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY;
+    dragSrcIdx = i;
+    ghost = el.cloneNode(true);
+    const rect = el.getBoundingClientRect();
+    Object.assign(ghost.style, {
+      position: 'fixed', width: rect.width + 'px', height: rect.height + 'px',
+      left: rect.left + 'px', top: rect.top + 'px',
+      pointerEvents: 'none', opacity: '0.75', zIndex: '999', margin: '0', transform: 'scale(1.05)'
+    });
+    document.body.appendChild(ghost); el.classList.add('dragging');
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    if (dragSrcIdx === null || !ghost) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    ghost.style.transform = `translate(${t.clientX - touchStartX}px,${t.clientY - touchStartY}px) scale(1.05)`;
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const card = target && target.closest('.card');
+    if (card) { const idx = parseInt(card.dataset.index); if (!isNaN(idx) && idx !== dragSrcIdx) card.classList.add('drag-over'); }
+  }, { passive: false });
+
+  el.addEventListener('touchend', e => {
+    if (ghost) { ghost.remove(); ghost = null; }
+    el.classList.remove('dragging');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
+    if (dragSrcIdx === null) return;
+    const t = e.changedTouches[0];
+    const target = document.elementFromPoint(t.clientX, t.clientY);
+    const card = target && target.closest('.card');
+    if (card) { const idx = parseInt(card.dataset.index); if (!isNaN(idx) && idx !== dragSrcIdx) { swapCards(dragSrcIdx, idx); return; } }
+    dragSrcIdx = null;
+  });
+}
+
+function swapCards(a, b) {
+  [cards[a], cards[b]] = [cards[b], cards[a]];
+  selected = selected.map(s => s === a ? b : s === b ? a : s);
+  dragSrcIdx = null;
+  renderGrid(); updateSubmitBtn();
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+document.getElementById('shuffle-btn').addEventListener('click', () => {
+  if (gameOver || !puzzle) return;
+  shuffle(cards); selected = []; renderGrid(); updateSubmitBtn();
+});
+document.getElementById('deselect-btn').addEventListener('click', () => {
+  selected = []; renderGrid(); updateSubmitBtn();
+});
+document.getElementById('submit-btn').addEventListener('click', submit);
+document.getElementById('modal-close-btn').addEventListener('click', initGame);
+
+// ── Auto-solve ────────────────────────────────────────────────────────────────
+document.getElementById('autosolve-btn').addEventListener('click', () => {
+  if (!puzzle || gameOver) return;
+  if (!confirm('Auto-solve this puzzle? This will reveal all answers.')) return;
+  gameOver = true;
+  const remaining = [...puzzle.groups].filter(g => !solved.find(s => s.color === g.color));
+  let delay = 0;
+  remaining.forEach(group => {
+    setTimeout(() => {
+      solved.push(group);
+      cards = cards.filter(c => c.groupColor !== group.color);
+      renderSolvedGroups();
+      renderGrid();
+    }, delay);
+    delay += 600;
+  });
+  setTimeout(() => {
+    document.getElementById('modal-title').textContent = '🤖 Solved!';
+    document.getElementById('modal-msg').textContent = 'Better luck next time!';
+    const resultEl = document.getElementById('modal-result');
+    resultEl.innerHTML = '';
+    document.getElementById('modal').classList.add('show');
+  }, delay + 200);
+});
+
+// ── Easter egg ────────────────────────────────────────────────────────────────
+let titleClicks = 0, titleTimer = null;
+const catLines = ['meow :3', 'purrr~', 'mrow?', '*knocks tiles off table*', 'im helping!'];
+document.querySelector('h1').style.cursor = 'default';
+document.querySelector('h1').addEventListener('click', () => {
+  titleClicks++;
+  if (titleTimer) clearTimeout(titleTimer);
+  titleTimer = setTimeout(() => { titleClicks = 0; }, 2000);
+  if (titleClicks >= 5) {
+    titleClicks = 0;
+    if (document.getElementById('cat-walker')) return;
+    const cat = document.createElement('div');
+    cat.id = 'cat-walker';
+    cat.textContent = '🐱';
+    const speech = document.createElement('div');
+    speech.id = 'cat-speech';
+    speech.textContent = catLines[Math.floor(Math.random() * catLines.length)];
+    document.body.appendChild(cat);
+    document.body.appendChild(speech);
+    setTimeout(() => { cat.remove(); speech.remove(); }, 6200);
+  }
+});
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const THEME_KEY = 'connections_theme';
+
+function isDarkHour() {
+  const h = new Date().getHours();
+  return h >= 20 || h < 7; // 8pm–7am
+}
+
+function applyTheme(dark) {
+  document.body.classList.toggle('dark', dark);
+  document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved !== null) {
+    applyTheme(saved === 'dark');
+  } else {
+    // Auto: time of day, fallback to system preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(isDarkHour() || prefersDark);
+  }
+}
+
+document.getElementById('theme-btn').addEventListener('click', () => {
+  const isDark = document.body.classList.toggle('dark');
+  document.getElementById('theme-btn').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+});
+
+// Re-evaluate auto theme at the top of each hour (if user hasn't manually set it)
+setInterval(() => {
+  if (localStorage.getItem(THEME_KEY) === null) applyTheme(isDarkHour());
+}, 60 * 1000);
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initTheme();
+rebuildSelector();
+loadDate(localDateStr());
+</script>
+</body>
+</html>
