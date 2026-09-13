@@ -1,11 +1,11 @@
 # Connections Clone
 
 A browser-based clone of the NYT Connections game, deployed at:
-**https://connections-clone-clawdia.surge.sh**
+**https://connections.clawdia.stefan.fail**
 
 ## What it is
 
-Single-file HTML/CSS/JS app (`index.html`) — no build step, no dependencies. Deployed via [Surge.sh](https://surge.sh).
+Single-file HTML/CSS/JS app (`index.html`) — no build step, no dependencies. Self-hosted via Caddy (static file_server, public, no auth).
 
 ## Features
 
@@ -53,18 +53,29 @@ Tiles are fixed at **148×72px** on desktop (616px wide grid), fluid equal-width
 
 ## Deployment
 
-Deployed with [Surge.sh](https://surge.sh) under account `flyho@mailbox.org`.
+Self-hosted via Caddy at `/home/openclaw/connections-clone` (static file_server, no build step).
 
+Caddyfile block (`/etc/caddy/Caddyfile`):
+```
+http://connections.clawdia.stefan.fail:11111 {
+	import hsts
+	root * /home/openclaw/connections-clone
+	file_server
+}
+```
+
+To deploy an update:
 ```bash
-cd connections
-npx surge . connections-clone-clawdia.surge.sh
-# enter email + password when prompted
+cd /home/openclaw/connections-clone
+git pull                       # or edit index.html directly
+sudo systemctl reload caddy    # picks up file changes immediately anyway;
+                                # reload only needed if Caddyfile itself changed
 ```
 
 ## File structure
 
 ```
-connections/
+connections-clone/
 ├── index.html   # entire app — all HTML, CSS, and JS in one file
 └── README.md    # this file
 ```
