@@ -30,18 +30,27 @@ This endpoint is not officially public but works without authentication. It retu
 
 ### CORS proxy
 
-The NYT API doesn't allow cross-origin requests from browsers. We route through:
+The NYT API doesn't allow cross-origin requests from browsers. We route through a same-origin reverse proxy configured in Caddy itself — no third-party proxy service, no CORS issue:
+
 ```
-https://api.codetabs.com/v1/proxy?quest=<encoded-url>
+handle_path /nyt-api/* {
+	rewrite * /svc/connections/v2{uri}
+	reverse_proxy https://www.nytimes.com {
+		header_up Host www.nytimes.com
+		header_up User-Agent "Mozilla/5.0 (compatible; connections-clone-proxy)"
+	}
+}
 ```
 
-**Proxies that were tried and failed:**
+The app fetches `/nyt-api/YYYY-MM-DD.json` (same origin as the page, so no CORS headers are needed at all).
+
+**Previously used a public CORS-proxy service (`api.codetabs.com`) — dropped 2026-09 after it started failing (522 / missing `Access-Control-Allow-Origin`).** Other proxies tried and failed earlier:
 - `corsproxy.io` — free tier blocked to localhost only (403)
 - `api.allorigins.win` — NYT blocks their IPs (522)
 - `proxy.cors.sh` — rate limited on free tier (429)
 - `thingproxy.freeboard.io` — DNS resolution failure
 
-`api.codetabs.com` is free with no known restrictions as of March 2026. If it breaks, try alternatives or deploy a small Cloudflare Worker proxy.
+Third-party CORS proxies are inherently fragile (rate limits, outages, IP blocks). Since we control the server this app is hosted on, proxying at the Caddy layer is both more reliable and removes a dependency.
 
 ## Tile sizing
 
@@ -59,6 +68,13 @@ Caddyfile block (`/etc/caddy/Caddyfile`):
 ```
 http://connections.clawdia.stefan.fail:11111 {
 	import hsts
+	handle_path /nyt-api/* {
+		rewrite * /svc/connections/v2{uri}
+		reverse_proxy https://www.nytimes.com {
+			header_up Host www.nytimes.com
+			header_up User-Agent "Mozilla/5.0 (compatible; connections-clone-proxy)"
+		}
+	}
 	root * /home/openclaw/connections-clone
 	file_server
 }

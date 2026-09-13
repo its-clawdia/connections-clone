@@ -259,8 +259,7 @@ async function fetchPuzzle(date) {
   const cached = getCachedPuzzle(date);
   if (cached) return cached;
 
-  const nytUrl = `https://www.nytimes.com/svc/connections/v2/${date}.json`;
-  const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(nytUrl)}`;
+  const proxyUrl = `/nyt-api/${date}.json`;
   const res = await fetch(proxyUrl);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
